@@ -22,10 +22,33 @@ Delay03AudioProcessor::Delay03AudioProcessor()
                        )
 #endif
 {
+    mCircularBufferLeft = nullptr;
+    mCircularBufferRight = nullptr;
+    mCircularBufferWriteHead = 0;
+    mCircularBufferLength = 0;
+    mDelayTimeInSamples = 0;
+    mDelayReadHead = 0;
+    
+    mFeedbackLeft = 0;
+    mFeedbackRight = 0;
+    
+    mDryWet = 0.5;
 }
 
 Delay03AudioProcessor::~Delay03AudioProcessor()
 {
+    if (mCircularBufferLeft != nullptr)
+    {
+        delete [] mCircularBufferLeft;
+        mCircularBufferLeft = nullptr;
+    }
+    
+    if (mCircularBufferRight != nullptr)
+    {
+        delete [] mCircularBufferRight;
+        mCircularBufferRight = nullptr;
+        
+    }
 }
 
 //==============================================================================
@@ -93,8 +116,21 @@ void Delay03AudioProcessor::changeProgramName (int index, const juce::String& ne
 //==============================================================================
 void Delay03AudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    // Use this method as the place to do any pre-playback
-    // initialisation that you need..
+    mDelayTimeInSamples = sampleRate * 0.5;
+    
+    mCircularBufferLength = sampleRate * MAX_DELAY_TIME;
+    
+    if (mCircularBufferLeft == nullptr)
+    {
+        mCircularBufferLeft = new float[mCircularBufferLength];
+    }
+    
+    if (mCircularBufferRight == nullptr)
+    {
+        mCircularBufferRight = new float[mCircularBufferLength];
+    }
+    
+    mCircularBufferWriteHead = 0;
 }
 
 void Delay03AudioProcessor::releaseResources()
@@ -133,26 +169,41 @@ void Delay03AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
 
-    // In case we have more outputs than inputs, this code clears any output
-    // channels that didn't contain input data, (because these aren't
-    // guaranteed to be empty - they may contain garbage).
-    // This is here to avoid people getting screaming feedback
-    // when they first compile a plugin, but obviously you don't need to keep
-    // this code if your algorithm always overwrites all the output channels.
+
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
+    
+    float* leftChannel = buffer.getWritePointer(0);
+    float* rightChannel = buffer.getWritePointer(1);
 
-    // This is the place where you'd normally do the guts of your plugin's
-    // audio processing...
-    // Make sure to reset the state if your inner loop is processing
-    // the samples and the outer loop is handling the channels.
-    // Alternatively, you can process the samples with the channels
-    // interleaved by keeping the same state.
-    for (int channel = 0; channel < totalNumInputChannels; ++channel)
+    for (int i = 0; i < buffer.getNumSamples(); i++)
     {
-        auto* channelData = buffer.getWritePointer (channel);
-
-        // ..do something to the data...
+        mCircularBufferLeft[mCircularBufferWriteHead] = leftChannel[i] + mFeedbackLeft;
+        mCircularBufferRight[mCircularBufferWriteHead] = rightChannel[i] + mFeedbackRight;
+        
+        mDelayReadHead = mCircularBufferWriteHead - mDelayTimeInSamples;
+        
+        if (mDelayReadHead < 0)
+        {
+            mDelayReadHead += mCircularBufferLength;
+        }
+        
+        float delaySampleLeft = mCircularBufferLeft[(int)mDelayReadHead];
+        float delaySampleRight = mCircularBufferLeft[(int)mDelayReadHead];
+        
+        mFeedbackLeft = delaySampleLeft * 0.8;
+        mFeedbackRight = delaySampleRight * 0.8;
+        
+        mCircularBufferWriteHead++;
+        
+        buffer.setSample(0, i, buffer.getSample(0, i) * mDryWet + delaySampleLeft * (1 - mDryWet));
+        buffer.setSample(1, i, buffer.getSample(1, i) * mDryWet + delaySampleRight * (1 - mDryWet));
+        
+        
+        if (mCircularBufferWriteHead >= mCircularBufferLength)
+        {
+            mCircularBufferWriteHead = 0;
+        }
     }
 }
 
