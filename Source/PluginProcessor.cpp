@@ -132,10 +132,14 @@ void Delay03AudioProcessor::prepareToPlay (double sampleRate, int samplesPerBloc
         mCircularBufferLeft = new float[mCircularBufferLength];
     }
     
+    zeromem(mCircularBufferLeft, mCircularBufferLength * sizeof(float));
+    
     if (mCircularBufferRight == nullptr)
     {
         mCircularBufferRight = new float[mCircularBufferLength];
     }
+    
+    zeromem(mCircularBufferRight, mCircularBufferLength * sizeof(float));
     
     mCircularBufferWriteHead = 0;
     
