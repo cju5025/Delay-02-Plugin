@@ -203,8 +203,8 @@ void Delay03AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
         
         mCircularBufferWriteHead++;
         
-        buffer.setSample(0, i, buffer.getSample(0, i) * *mDryWetParameter + delaySampleLeft * (1 - *mDryWetParameter));
-        buffer.setSample(1, i, buffer.getSample(1, i) * *mDryWetParameter + delaySampleRight * (1 - *mDryWetParameter));
+        buffer.setSample(0, i, buffer.getSample(0, i) * (1 - *mDryWetParameter) + delaySampleLeft * *mDryWetParameter);
+        buffer.setSample(1, i, buffer.getSample(1, i) * (1 - *mDryWetParameter) + delaySampleRight * *mDryWetParameter);
         
         
         if (mCircularBufferWriteHead >= mCircularBufferLength)
