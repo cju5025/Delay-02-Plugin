@@ -54,8 +54,12 @@ public:
     //==============================================================================
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
+    
+    float linear_interpolation(float sample_x, float sample_x1, float inPhase);
 
 private:
+    
+    float mDelayTimeSmoothed;
     
     AudioParameterFloat* mDryWetParameter;
     AudioParameterFloat* mFeedbackParameter;

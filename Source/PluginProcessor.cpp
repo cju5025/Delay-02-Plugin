@@ -38,6 +38,8 @@ Delay03AudioProcessor::Delay03AudioProcessor()
     mFeedbackLeft = 0;
     mFeedbackRight = 0;
     
+    mDelayTimeSmoothed = 0;
+    
 }
 
 Delay03AudioProcessor::~Delay03AudioProcessor()
@@ -136,6 +138,8 @@ void Delay03AudioProcessor::prepareToPlay (double sampleRate, int samplesPerBloc
     }
     
     mCircularBufferWriteHead = 0;
+    
+    mDelayTimeSmoothed = *mDelayTimeParameter;
 }
 
 void Delay03AudioProcessor::releaseResources()
@@ -177,14 +181,16 @@ void Delay03AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
 
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear (i, 0, buffer.getNumSamples());
-    
-    mDelayTimeInSamples = getSampleRate() * *mDelayTimeParameter;
-    
+        
     float* leftChannel = buffer.getWritePointer(0);
     float* rightChannel = buffer.getWritePointer(1);
 
     for (int i = 0; i < buffer.getNumSamples(); i++)
     {
+        mDelayTimeSmoothed = mDelayTimeSmoothed - 0.001 * (mDelayTimeSmoothed - *mDelayTimeParameter);
+        mDelayTimeInSamples = getSampleRate() * mDelayTimeSmoothed;
+
+        
         mCircularBufferLeft[mCircularBufferWriteHead] = leftChannel[i] + mFeedbackLeft;
         mCircularBufferRight[mCircularBufferWriteHead] = rightChannel[i] + mFeedbackRight;
         
@@ -195,8 +201,18 @@ void Delay03AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce
             mDelayReadHead += mCircularBufferLength;
         }
         
-        float delaySampleLeft = mCircularBufferLeft[(int)mDelayReadHead];
-        float delaySampleRight = mCircularBufferLeft[(int)mDelayReadHead];
+        int readHead_x = (int)mDelayReadHead;
+        int readHead_x1 = readHead_x + 1;
+        float readHeadFloat = mDelayReadHead - readHead_x;
+        
+        if (readHead_x1 >= mCircularBufferLength)
+        {
+            readHead_x1 -= mCircularBufferLength;
+        }
+        
+        
+        float delaySampleLeft = linear_interpolation(mCircularBufferLeft[readHead_x], mCircularBufferLeft[readHead_x1], readHeadFloat);
+        float delaySampleRight = linear_interpolation(mCircularBufferRight[readHead_x], mCircularBufferRight[readHead_x1], readHeadFloat);
         
         mFeedbackLeft = delaySampleLeft * *mFeedbackParameter;
         mFeedbackRight = delaySampleRight * *mFeedbackParameter;
@@ -244,4 +260,9 @@ void Delay03AudioProcessor::setStateInformation (const void* data, int sizeInByt
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new Delay03AudioProcessor();
+}
+
+float Delay03AudioProcessor::linear_interpolation(float sample_x, float sample_x1, float inPhase)
+{
+    return (1 - inPhase) * sample_x + inPhase * sample_x1;
 }
